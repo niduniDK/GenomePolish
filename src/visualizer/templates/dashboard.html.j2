@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolishML — {{ site.contig }} : {{ site.position }}</title>
+
+<!-- Plotly (pin a version; swap for a local copy if the cluster has no internet) -->
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+
+<link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+<div class="dash">
+
+  <!-- ======================= HEADER ======================= -->
+  <header class="dash-header">
+    <div class="brand">
+      <span class="brand-mark">PML</span>
+      <div>
+        <div class="brand-title">PolishML</div>
+        <div class="brand-sub">Comparative genome view · {{ site.zoom_bp | default(10) }}px</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="contig-range">contig_{{ site.contig }} : {{ "{:,}".format(site.range_start) }} – {{ "{:,}".format(site.range_end) }}</span>
+      {% if site.status %}
+      <span class="status-pill status-{{ site.status_level | default('warn') }}">{{ site.status }}</span>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- ======================= METRIC CARDS ======================= -->
+  <section class="metric-row">
+    <div class="metric-card">
+      <div class="metric-index">1</div>
+      <div class="metric-value base">{{ site.assembly_base }}</div>
+      <div class="metric-label">Assembly base</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-index">2</div>
+      <div class="metric-value base accent-green">{{ site.corrected_base }}</div>
+      <div class="metric-label">Corrected base</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-index">3</div>
+      <div class="metric-value accent-cyan">{{ "%.3f"|format(site.p_error) }}</div>
+      <div class="metric-label">p(error) calibrated</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-index">4</div>
+      <div class="metric-value accent-amber">{{ site.decision }}</div>
+      <div class="metric-label">Decision (p &lt; {{ site.threshold }})</div>
+    </div>
+  </section>
+
+  <!-- ======================= RAW VS POLISHED ======================= -->
+  <section class="panel">
+    <h2><span class="dot dot-error"></span> Raw assembly vs polished — whole genome</h2>
+    <p class="alignment-help">Only the visible {{ alignment_window_bases }}-base window is loaded. Scroll horizontally to inspect the complete contig.</p>
+    
+    {% for contig_alignment in genome_alignment %}
+    <div class="contig-alignment">
+      <div class="contig-alignment-title">{{ contig_alignment.contig }} <span>{{ "{:,}".format(contig_alignment.length) }} bases</span></div>
+      <div class="alignment-position-control">
+        <label for="alignment-position-{{ loop.index0 }}">Window start</label>
+        <input id="alignment-position-{{ loop.index0 }}" class="alignment-position" type="range" min="0" max="{{ [contig_alignment.length - alignment_window_bases, 0]|max }}" value="0" step="1" data-contig-index="{{ loop.index0 }}">
+        <output class="alignment-position-value">1–{{ [alignment_window_bases, contig_alignment.length]|min }}</output>
+      </div>
+      <div class="align-view lazy-alignment" data-contig-index="{{ loop.index0 }}"></div>
+    </div>
+    {% endfor %}
+    <div class="legend">
+      <span><i class="sw sw-error"></i> Error in raw</span>
+      <span><i class="sw sw-applied"></i> Correction applied</span>
+      <span><i class="sw sw-hp"></i> HP fix (deleted)</span>
+      <span>| Connection: | . . . X . . . |</span>
+    </div>
+  </section>
+
+  <!-- ======================= PILEUP + SHAP + RATIONALE ======================= -->
+  <section class="triple-row">
+
+    <div class="panel pileup-panel">
+      <h2><span class="dot dot-purple"></span> Pileup at position {{ "{:,}".format(site.position) }} — error site</h2>
+      <div class="pileup-sub">
+        {{ pileup.n_reads }} reads aligned — {{ pileup.n_g }} G vs {{ pileup.n_a }} A
+        <span class="pileup-depth">Depth: {{ pileup.depth }}x</span>
+      </div>
+      <div id="pileup-table"></div>
+      <div class="pileup-footer">
+        ...{{ pileup.more_reads }} more reads ({{ pileup.more_breakdown }})<br>
+        Strand bias: {{ pileup.strand_bias }} &nbsp; Mean MQ: {{ pileup.mean_mq }} &nbsp; AF: {{ pileup.af }}
+      </div>
+    </div>
+
+    <div class="panel shap-panel">
+      <h2><span class="dot dot-violet"></span> Feature contributions (SHAP)</h2>
+      <label for="window-selector">Selected base/window: <output id="window-position">{{ site.position }}</output></label>
+      <input id="window-selector" type="range" min="0" max="{{ [window_rows|length - 1, 0]|max }}" value="0" step="1">
+      <div class="shap-axis-labels">
+        <span>← Pushes correct</span><span>Pushes error →</span>
+      </div>
+      <div id="shap-chart"></div>
+      <div class="shap-footer">
+        Base prediction: {{ shap.base_value }} &nbsp;|&nbsp; SHAP sum: {{ shap.shap_sum }}
+        &nbsp;|&nbsp; Final p(error): <b>{{ shap.final_value }}</b>
+      </div>
+    </div>
+
+    <div class="panel rationale-panel">
+      <h2><span class="dot dot-amber"></span> Decision rationale</h2>
+      <p>{{ rationale.summary }}</p>
+      <ul>
+        {% for point in rationale.points %}
+        <li>{{ point }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+  </section>
+
+</div>
+
+<!-- ======================= DATA HANDOFF ======================= -->
+<!-- Summary data is embedded by Jinja2. Alignment sequence windows are fetched
+  on demand as the user scrolls; Plotly remains client-side for interactive charts. -->
+<script id="pileup-data" type="application/json">{{ pileup.reads | tojson }}</script>
+<script id="shap-data" type="application/json">{{ shap.features | tojson }}</script>
+<script id="window-data" type="application/json">{{ window_rows | tojson }}</script>
+<script id="feature-names" type="application/json">{{ feature_names | tojson }}</script>
+<script id="feature-baseline" type="application/json">{{ feature_baseline | tojson }}</script>
+<script id="alignment-manifest-url" type="application/json">{{ "alignment-manifest.json" | tojson }}</script>
+
+<script src="shap_wasm.js"></script>
+<script src="dashboard.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", async function () {
+    const pileupReads = JSON.parse(document.getElementById("pileup-data").textContent);
+    const initialShapFeatures = JSON.parse(document.getElementById("shap-data").textContent);
+    const windowRows = JSON.parse(document.getElementById("window-data").textContent);
+    const featureNames = JSON.parse(document.getElementById("feature-names").textContent);
+    const featureBaseline = JSON.parse(document.getElementById("feature-baseline").textContent);
+    const alignmentManifestUrl = JSON.parse(document.getElementById("alignment-manifest-url").textContent);
+
+    PolishMLDash.renderPileupTable("pileup-table", pileupReads);
+    try {
+      await PolishMLDash.initializeLazyAlignments(".lazy-alignment", alignmentManifestUrl);
+    } catch (error) {
+      document.querySelectorAll(".lazy-alignment").forEach((container) => {
+        container.textContent = `Alignment unavailable: ${error.message}. Open this dashboard over http://127.0.0.1, not https://.`;
+        container.classList.add("alignment-error");
+      });
+      console.error(error);
+    }
+    await PolishMLDash.initializeWindowShap(
+      "window-selector",
+      "window-position",
+      "shap-chart",
+      windowRows,
+      featureNames,
+      featureBaseline,
+      initialShapFeatures,
+    );
+  });
+</script>
+
+</body>
+</html>

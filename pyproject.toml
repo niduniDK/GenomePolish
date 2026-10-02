@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genome-polisher"
+version = "0.1.0"
+description = "A simple Python CLI tool for bacterial genome polishing."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+	"shap",
+]
+
+[project.scripts]
+base-correct = "base_error_correction.polishml:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+visualizer = ["templates/*.html", "templates/*.j2", "templates/*.css", "templates/*.js"]

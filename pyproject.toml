@@ -9,6 +9,12 @@ description = "A simple Python CLI tool for bacterial genome polishing."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+	"numpy",
+	"pandas",
+	"pysam",
+	"onnx",
+	"onnxruntime",
+	"jinja2",
 	"shap",
 ]
 

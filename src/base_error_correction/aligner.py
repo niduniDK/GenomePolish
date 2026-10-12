@@ -50,6 +50,12 @@ class Aligner:
         illumina_bam = output_directory / "illumina.bam"
         ont_sam = output_directory / "ont.sam"
         ont_bam = output_directory / "ont.bam"
+        for bam_path in (illumina_bam, ont_bam):
+            if bam_path.is_symlink():
+                bam_path.unlink()
+            for index_path in (Path(f"{bam_path}.bai"), bam_path.with_suffix(".bai")):
+                if index_path.is_symlink():
+                    index_path.unlink()
 
         with illumina_sam.open("w") as sam_file:
             subprocess.run(

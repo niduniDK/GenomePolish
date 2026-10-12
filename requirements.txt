@@ -4,3 +4,4 @@ pysam
 onnxruntime
 jinja2
 shap
+onnx

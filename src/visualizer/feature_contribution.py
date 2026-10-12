@@ -13,6 +13,7 @@ def calculate_shap_features(
 	feature_columns: Sequence[str],
 	row_index: int = 0,
 	max_evals: int = 2048,
+	background_data: Optional[Union[np.ndarray, list]] = None,
 ) -> list[dict[str, float | str]]:
 	"""Calculate named SHAP contributions for one prediction row."""
 	missing = [
@@ -27,6 +28,7 @@ def calculate_shap_features(
 	values = get_shap_values(
 		getattr(model, "session", model),
 		prediction_dataframe.loc[:, list(feature_columns)],
+		background_data=background_data,
 		max_evals=max_evals,
 	)
 	row_values = np.asarray(values, dtype=np.float64)[row_index]

@@ -4,7 +4,8 @@ import pysam
 
 
 def extract_ont_features(bam_path, output_csv):
-
+    print("\nONT per-base feature extraction...")
+    print("\nOpening BAM...")
     bam = pysam.AlignmentFile(bam_path, "rb")
 
     with open(output_csv, "w", newline="") as out:
@@ -32,7 +33,7 @@ def extract_ont_features(bam_path, output_csv):
 
             length = bam.get_reference_length(contig)
 
-            print(f"Processing {contig} ({length} bp)...")
+            print(f"\nProcessing {contig} ({length} bp)...")
 
             coverage = [0] * length
             mismatch_count = [0] * length
@@ -102,16 +103,7 @@ def extract_ont_features(bam_path, output_csv):
                             softclip_read_count[last_ref] += 1
 
                 previous_reference_position = None
-
-                # -------------------------------------------------
-                # Process alignment
-                # -------------------------------------------------
-
                 for query_pos, ref_pos, reference_base in aligned_pairs:
-
-                    # -------------------------------------------------
-                    # Insertion
-                    # -------------------------------------------------
 
                     if ref_pos is None:
 
@@ -132,19 +124,11 @@ def extract_ont_features(bam_path, output_csv):
 
                     previous_reference_position = ref_pos
 
-                    # -------------------------------------------------
-                    # Deletion
-                    # -------------------------------------------------
-
                     if query_pos is None:
 
                         deletion_count[ref_pos] += 1
 
                         continue
-
-                    # -------------------------------------------------
-                    # Normal aligned base
-                    # -------------------------------------------------
 
                     coverage[ref_pos] += 1
 
@@ -176,10 +160,6 @@ def extract_ont_features(bam_path, output_csv):
 
                         alt_bq_sum[ref_pos] += base_quality
                         alt_bq_count[ref_pos] += 1
-
-            # ---------------------------------------------------------
-            # Write per-base features
-            # ---------------------------------------------------------
 
             for pos in range(length):
 
@@ -281,6 +261,6 @@ def extract_ont_features(bam_path, output_csv):
                 ])
 
     bam.close()
-    print("ONT feature extraction complete.")
+    print("\nONT feature extraction complete.")
     print(f"Output saved to: {output_csv}")
 

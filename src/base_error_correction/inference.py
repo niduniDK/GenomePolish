@@ -9,8 +9,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from .aligner import Aligner
-from .utility.extract_illumina_features import extract_illumina_features
-from .utility.extract_ont_features import extract_ont_features
+from .utils.extract_illumina_features import extract_illumina_features
+from .utils.extract_ont_features import extract_ont_features
 
 
 FEATURE_COLUMNS = (
@@ -106,18 +106,30 @@ def _sequence_context(sequence, position, window_size=21):
             while end < len(sequence) - 1 and sequence[end + 1] == candidate:
                 end += 1
             if end - start + 1 >= 4:
-                distance_to_homopolymer = min(abs(position - start), abs(position - end))
+                distance_to_homopolymer = min(
+                    abs(position - start), abs(position - end)
+                )
                 break
 
     half_window = window_size // 2
-    window = sequence[max(0, position - half_window):min(len(sequence), position + half_window + 1)]
+    window = sequence[
+        max(0, position - half_window) : min(len(sequence), position + half_window + 1)
+    ]
     valid_bases = [item for item in window if item in "ACGT"]
-    gc_content = sum(item in "GC" for item in valid_bases) / len(valid_bases) if valid_bases else 0.0
+    gc_content = (
+        sum(item in "GC" for item in valid_bases) / len(valid_bases)
+        if valid_bases
+        else 0.0
+    )
     counts = Counter(window)
-    sequence_complexity = -sum(
-        (count / len(window)) * math.log2(count / len(window))
-        for count in counts.values()
-    ) if window else 0.0
+    sequence_complexity = (
+        -sum(
+            (count / len(window)) * math.log2(count / len(window))
+            for count in counts.values()
+        )
+        if window
+        else 0.0
+    )
     return {
         "distance_to_contig_end": min(position, len(sequence) - position - 1),
         "gc_content": gc_content,
@@ -189,9 +201,9 @@ def build_feature_table(illumina_bam, ont_bam, assembly_fasta, output_csv=None):
     table = pd.concat([sequence_indexed, table_indexed], axis=1).reset_index()
 
     table = table[["contig", "position", "assembly_base", *FEATURE_COLUMNS]]
-    table.loc[:, list(FEATURE_COLUMNS)] = table.loc[
-        :, list(FEATURE_COLUMNS)
-    ].fillna(0.0)
+    table.loc[:, list(FEATURE_COLUMNS)] = table.loc[:, list(FEATURE_COLUMNS)].fillna(
+        0.0
+    )
 
     if output_csv is not None:
         output_csv = Path(output_csv)
@@ -202,14 +214,20 @@ def build_feature_table(illumina_bam, ont_bam, assembly_fasta, output_csv=None):
 
 
 class ErrorDetectionModel:
-
     def __init__(self, model_path, providers=["CPUExecutionProvider"]):
-
         self.session = ort.InferenceSession(model_path, providers=providers)
-        self.input_name = (self.session.get_inputs()[0].name)
+        self.input_name = self.session.get_inputs()[0].name
 
-    def predict(self, feature_table=None, *, assembly_fasta=None,
-                illumina_bam=None, ont_bam=None, output_csv=None, threads=4):
+    def predict(
+        self,
+        feature_table=None,
+        *,
+        assembly_fasta=None,
+        illumina_bam=None,
+        ont_bam=None,
+        output_csv=None,
+        threads=4,
+    ):
 
         if feature_table is None:
             feature_table = build_feature_table(
@@ -235,10 +253,12 @@ class ErrorDetectionModel:
         outputs = self.session.run(None, {self.input_name: X})
         labels = np.asarray(outputs[0]).reshape(-1)
         probability_maps = outputs[1]
-        probabilities = np.asarray([
-            float(probability_map.get(int(label), 0.0))
-            for label, probability_map in zip(labels, probability_maps)
-        ])
+        probabilities = np.asarray(
+            [
+                float(probability_map.get(int(label), 0.0))
+                for label, probability_map in zip(labels, probability_maps)
+            ]
+        )
         label_names = {
             0: "correct",
             1: "mismatch",
@@ -247,13 +267,24 @@ class ErrorDetectionModel:
         }
         metadata = feature_table.reset_index(drop=True).copy()
         metadata["assembly_position"] = metadata["position"]
-        metadata["predicted_label"] = [label_names.get(int(label), "correct") for label in labels]
+        metadata["predicted_label"] = [
+            label_names.get(int(label), "correct") for label in labels
+        ]
         metadata["error_proba"] = probabilities
         result = metadata
         # result.to_csv(output_csv, index=False)
         return result
 
-def preprocess_for_base_err_detection(feature_table=None, *, assembly_fasta=None, illumina_bam=None, ont_bam=None, output_csv=None, threads=4):
+
+def preprocess_for_base_err_detection(
+    feature_table=None,
+    *,
+    assembly_fasta=None,
+    illumina_bam=None,
+    ont_bam=None,
+    output_csv=None,
+    threads=4,
+):
     if feature_table is None:
         feature_table = build_feature_table(
             illumina_bam,

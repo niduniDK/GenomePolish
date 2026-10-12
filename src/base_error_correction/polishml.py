@@ -4,16 +4,19 @@ import webbrowser
 from pathlib import Path
 
 import pandas as pd
+import onnx
 
-from .utility.correction_utils import (
+from .utils.correction_utils import (
     correct_assemblies,
     write_fasta,
 )
 from .inference import ErrorDetectionModel, FEATURE_COLUMNS
 from .aligner import Aligner, get_alignments
-from visualizer.visualize import render_dashboard
+from visualizer.feature_contribution import onnx_to_tree_dict
+from visualizer.visualize import render_dashboard, start_dashboard_server
 
 # from jinja2 import Environment, FileSystemLoader
+
 
 def main():
     parser = argparse.ArgumentParser(prog="base-correct", description=__doc__)
@@ -44,8 +47,14 @@ def main():
     parser.add_argument(
         "--alignment-window-bases",
         type=int,
-        default=50,
-        help="number of bases visible in each horizontally scrollable alignment track",
+        default=256,
+        help="number of bases visible in the dashboard window",
+    )
+    parser.add_argument(
+        "--chunk-bases",
+        type=int,
+        default=256,
+        help="number of bases written per cached JSON chunk; must be >= --alignment-window-bases",
     )
     parser.add_argument(
         "--aligner",
@@ -60,15 +69,18 @@ def main():
     bam_paths = {}
 
     if not args.illumina_bam and not args.ont_bam and not args.aligner:
-        parser.error(
-            "at least one of --illumina-bam / --ont-bam is required"
-        )
+        parser.error("at least one of --illumina-bam / --ont-bam is required")
 
     if not args.illumina_bam and not args.ont_bam and args.aligner:
-        if all(value is not None for value in (
-                args.assembly_fasta, args.illumina_r1, args.illumina_r2,
+        if all(
+            value is not None
+            for value in (
+                args.assembly_fasta,
+                args.illumina_r1,
+                args.illumina_r2,
                 args.ont_fastq,
-            )):
+            )
+        ):
             illumina_bam, ont_bam = get_alignments(
                 args.assembly_fasta,
                 args.illumina_r1,
@@ -123,13 +135,31 @@ def main():
         model=base_model,
         feature_columns=FEATURE_COLUMNS,
         alignment_window_bases=args.alignment_window_bases,
+        chunk_bases=args.chunk_bases,
+        bam_paths=bam_paths,
     )
     print(f"dashboard written to {dashboard_path}")
-    # webbrowser.open(dashboard_path.resolve().as_uri())
+    server, dashboard_url = start_dashboard_server(
+        dashboard_path,
+        bam_paths,
+        prediction_dataframe=predictions,
+        feature_names=FEATURE_COLUMNS,
+        shap_model=onnx_to_tree_dict(
+            model_path,
+            predictions.loc[:, list(FEATURE_COLUMNS)],
+        ),
+    )
+    print(f"dashboard available at {dashboard_url} (press Ctrl+click to open in browser)")
+    webbrowser.open(dashboard_url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()
     # env = Environment(loader=FileSystemLoader("/home/cse_g2/Niduni/genome-polish-tool/src/visualizer/templates"))
     # template = env.get_template("dashboard.html.j2")
     # out_path = Path(__file__).parent / "out.html"
     # out_path.write_text(template.render(**context))
+
 
 if __name__ == "__main__":
     main()

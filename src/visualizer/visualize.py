@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .feature_contribution import calculate_shap_features
+from .feature_contribution import MulticlassShap
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import pysam
@@ -67,11 +68,22 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             if matches.empty:
                 self.send_error(404, "No prediction found for this position")
                 return
-            values = calculate_shap_features(
-                self.shap_model,
-                matches.iloc[[0]],
-                self.feature_names,
+            # values = calculate_shap_features(
+            #     self.shap_model,
+            #     matches.iloc[[0]],
+            #     self.feature_names,
+            # )
+            row = matches.iloc[0]
+            values, base_value, class_label = self.shap_model.explain(
+                matches.iloc[[0]], row["predicted_label"]
             )
+            payload = {
+                "features": values,
+                "shap_sum": sum(item["value"] for item in values),
+                "base_value": base_value,
+                "class": class_label,
+                "p_error": float(row.get("error_proba", 0.0)),
+            }
             payload = {
                 "features": values,
                 "shap_sum": sum(item["value"] for item in values),

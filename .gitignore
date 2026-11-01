@@ -29,3 +29,6 @@ pnpm-debug.log*
 .env.*
 .DS_Store
 .vscode/
+
+.sample_corrected_fasta/
+sample_corrected_fasta/

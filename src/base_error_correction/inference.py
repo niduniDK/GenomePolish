@@ -272,7 +272,7 @@ class ErrorDetectionModel:
         ]
         metadata["error_proba"] = probabilities
         result = metadata
-        # result.to_csv(output_csv, index=False)
+        result.to_csv(output_csv, index=False)
         return result
 
 
